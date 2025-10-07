@@ -1,0 +1,13 @@
+<launch>
+    <node pkg="autoware_mini_practice_solutions" name="publisher_1" type="publisher.py" output="screen" required="true" >
+         <param name="message"   value="Tartu" />
+         <param name="rate"   value="2" type="double" />
+    </node>
+
+    <node pkg="autoware_mini_practice_solutions" name="publisher_2" type="publisher.py" output="screen" required="true" >
+         <param name="message"   value="Tallinn!" />
+         <param name="rate"   value="10" type="double"/>
+    </node>
+
+    <node pkg="autoware_mini_practice_solutions" name="subscriber" type="subscriber.py" output="screen" required="true"/>
+</launch>
