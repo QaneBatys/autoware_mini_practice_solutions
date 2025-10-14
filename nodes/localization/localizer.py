@@ -73,6 +73,18 @@ class Localizer:
         current_pose_msg.pose.orientation = orientation
         self.current_pose_pub.publish(current_pose_msg)
 
+        # velocity
+        north_x = msg.north_velocity
+        east_x = msg.east_velocity
+        vel_x = math.sqrt(north_x**2 + east_x**2)
+
+        # publish current pose
+        current_vel_msg = TwistStamped()
+        current_vel_msg.header.stamp = msg.header.stamp
+        current_vel_msg.header.frame_id = "base_link"
+        current_vel_msg.twist.linear.x = vel_x
+        self.current_velocity_pub.publish(current_vel_msg)
+
 
     def run(self):
         rospy.spin()
