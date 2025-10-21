@@ -58,16 +58,16 @@ class Localizer:
                     yaw += 2 * math.pi
                 return yaw
 
-        #Get Azimuth and Convert to Radians
+        # convert azimuth to rad
         raw_azimuth_rad = math.radians(msg.azimuth) 
 
-        #Get Azimuth Correction (Meridian Convergence)
+        # Get azimuth correction (Meridian Convergence)
         azimuth_correction = self.utm_projection.get_factors(msg.longitude, msg.latitude).meridian_convergence
 
-        # Apply Correction: Corrected Azimuth = Raw Azimuth - Correction
+        #corrected azimuth
         corrected_azimuth_rad = raw_azimuth_rad - azimuth_correction
 
-        #Convert the Corrected Azimuth to ROS Yaw
+        # Converting
         yaw = convert_azimuth_to_yaw(corrected_azimuth_rad)
 
         x, y, z, w = quaternion_from_euler(0, 0, yaw)
