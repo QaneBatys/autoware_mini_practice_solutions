@@ -1,2 +1,2 @@
 pure_pursuit_follower:
-  lookahead_distance: 6.0
+  lookahead_distance: 20.0 # 6.0
