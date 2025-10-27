@@ -46,7 +46,6 @@ class PurePursuitFollower:
         
 
     def current_pose_callback(self, msg):
-        # TODO
         _, _, current_heading_angle = euler_from_quaternion((msg.pose.orientation.x, msg.pose.orientation.y , msg.pose.orientation.z , msg.pose.orientation.w))
 
         steering_angle = 0.0
@@ -55,12 +54,8 @@ class PurePursuitFollower:
             current_pose = Point([msg.pose.position.x, msg.pose.position.y])
             d_ego_from_path_start = self.path_linestring.project(current_pose)
             target_distance_arc = d_ego_from_path_start + self.lookahead_distance
-            
-            
-            if target_distance_arc >= self.path_linestring.length:
-                lookahead_point = self.path_linestring.interpolate(self.path_linestring.length)
-            else:
-                lookahead_point = self.path_linestring.interpolate(target_distance_arc)
+            lookahead_point = self.path_linestring.interpolate(self.path_linestring.length)
+
             
             lookahead_x = lookahead_point.x
             lookahead_y = lookahead_point.y
@@ -73,7 +68,6 @@ class PurePursuitFollower:
             Ld = distance(current_pose, lookahead_point)
 
             alpha = target_heading_angle - current_heading_angle
-            alpha = atan2(sin(alpha), cos(alpha))
             if Ld > 0.0:
                  steering_angle = atan((2.0 * self.wheel_base * sin(alpha)) / Ld)
             else:
@@ -81,9 +75,6 @@ class PurePursuitFollower:
             
             if self.distance_to_velocity_interpolator is not None:
                 target_velocity = self.distance_to_velocity_interpolator(d_ego_from_path_start)
-
-
-            print(d_ego_from_path_start)
         
         vehicle_cmd = VehicleCmd()
         vehicle_cmd.ctrl_cmd.steering_angle = steering_angle
