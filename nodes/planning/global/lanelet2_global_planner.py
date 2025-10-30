@@ -97,7 +97,6 @@ class Lanelet2GlobalPlanner:
         self.goal_point = user_goal_point_2d 
         # get start and end lanelets
         start_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.current_location, 1)[0][1]
-        # We still use findNearest for routing, but we'll manually set the path end later.
         goal_lanelet = findNearest(self.lanelet2_map.laneletLayer, user_goal_point_2d, 1)[0][1]
         # find routing graph
         route = self.graph.getRoute(start_lanelet, goal_lanelet, 0, True)
@@ -107,9 +106,7 @@ class Lanelet2GlobalPlanner:
             path_no_lane_change = path.getRemainingLane(start_lanelet)
             waypoints = self.convert_lanelet_sequence_to_waypoints(path_no_lane_change)
             if waypoints:
-                # 1. Get speed from the last waypoint (or use 0.0 for a definite stop)
                 final_speed = waypoints[-1].speed
-                # 2. Create the new final waypoint
                 final_waypoint = Waypoint()
                 final_waypoint.position.x = user_goal_point_2d.x
                 final_waypoint.position.y = user_goal_point_2d.y

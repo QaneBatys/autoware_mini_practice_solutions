@@ -1,0 +1,7 @@
+The problem: car stops at the end of the path despite user goal.
+
+I added goal position to waypoints lists setting velocity the same
+as last waypoints, basically 0. 
+I thought I was doing the second case, but i think it is not what they wanted.
+Local planner see waypoint at end goal and see its velocity equals to 0, that is why
+vehicle stops at the goal position.
