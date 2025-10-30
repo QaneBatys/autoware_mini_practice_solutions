@@ -139,6 +139,6 @@ class Lanelet2GlobalPlanner:
         
 
 if __name__ == '__main__':
-    rospy.init_node('lanelet2_global_planner', anonymous=False)
+    rospy.init_node('lanelet2_global_planner')
     node = Lanelet2GlobalPlanner()
     node.run()
