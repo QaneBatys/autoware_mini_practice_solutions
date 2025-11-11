@@ -39,7 +39,7 @@ class Localizer:
         pos_x = position_x  - self.origin_x
         pos_y = position_y - self.origin_y
         pos_z = msg.height - self.undulation
-        print(pos_x,pos_y) 
+        #print(pos_x,pos_y) 
 
         # calculate azimuth correction
         azimuth_correction = self.utm_projection.get_factors(msg.longitude, msg.latitude).meridian_convergence
