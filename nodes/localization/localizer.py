@@ -67,7 +67,7 @@ class Localizer:
         #corrected azimuth
         corrected_azimuth_rad = raw_azimuth_rad - azimuth_correction
 
-        corrected_azimuth_rad = math.rad(corrected_azimuth_rad)
+        corrected_azimuth_rad = math.radians(corrected_azimuth_rad)
 
         # Converting
         yaw = convert_azimuth_to_yaw(corrected_azimuth_rad)
