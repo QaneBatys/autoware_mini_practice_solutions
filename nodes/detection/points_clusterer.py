@@ -41,7 +41,6 @@ class PointClusterer:
         
         points_labeled_clustered = points_labeled_all[mask]
 
-
         dtype_spec = [
            ('x', np.float32),
            ('y', np.float32),
