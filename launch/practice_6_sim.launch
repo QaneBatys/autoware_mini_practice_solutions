@@ -11,12 +11,13 @@
     <arg name="use_tracking"            default="false" />
     <arg name="use_local_planner"       default="true" />
     <arg name="enable_auto_stop_checker" default="true"         doc="enable auto stop checker" />
+    <arg name="use_extracted_local_path" default="false"       doc="use local extracted path for controller" />
 
     <!-- Bicycle_model simulator -->
     <group ns="vehicle">
         <!-- Bicycle_model simulator -->
         <node pkg="autoware_mini" type="bicycle_simulation.py" name="bicycle_simulation" output="screen" required="true">
-            <param name="lanelet2_map_name" value="$(find autoware_mini)/data/maps/$(arg lanelet2_map_name)" />
+            <param name="lanelet2_map_path" value="$(find autoware_mini)/data/maps/$(arg lanelet2_map_name)" />
         </node>
 
         <rosparam command="load" file="$(find autoware_mini)/config/vehicle.yaml" />
@@ -58,7 +59,10 @@
             <node pkg="autoware_mini_practice_solutions" type="simple_speed_planner.py" name="simple_speed_planner" output="screen" required="true" />
         </group>
         <!-- Local path visualizer -->
-        <node pkg="autoware_mini" type="local_path_visualizer.py" name="local_path_visualizer" output="screen" required="true"/>
+        <node pkg="autoware_mini" type="local_path_visualizer.py" name="local_path_visualizer" output="screen" required="true">
+            <remap unless="$(arg use_extracted_local_path)" from="local_path" to="/planning/local_path" />
+            <remap if="$(arg use_extracted_local_path)" from="local_path" to="/planning/extracted_local_path" />
+        </node>
 
         <!-- Config -->
         <rosparam command="load" file="$(find autoware_mini_practice_solutions)/config/planning.yaml" />
@@ -85,7 +89,8 @@
     <group ns="control">
         <!-- Follower -->
         <node pkg="autoware_mini_practice_solutions" type="pure_pursuit_follower.py" name="pure_pursuit_follower" output="screen" required="true" >
-            <remap from="path" to="/planning/local_path" />
+            <remap unless="$(arg use_extracted_local_path)" from="path" to="/planning/local_path" />
+            <remap if="$(arg use_extracted_local_path)" from="path" to="/planning/extracted_local_path" />
         </node>
 
         <rosparam command="load" file="$(find autoware_mini_practice_solutions)/config/control.yaml"/>

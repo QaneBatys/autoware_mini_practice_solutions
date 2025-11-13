@@ -99,7 +99,7 @@ class ClusterDetector:
             pub_msg.objects.append(obj)
             
         self.objects_pub.publish(pub_msg)         
-
+        print()
 
 
 
