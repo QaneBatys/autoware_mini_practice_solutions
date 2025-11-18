@@ -60,11 +60,8 @@ class CollisionPointsManager:
             goal_waypoint_position = self.goal_waypoint_position
         collision_points = np.array([], dtype=DTYPE)
 
-        # 1. Check for Empty Path and Handle Immediately
         if not msg.waypoints:
             rospy.logwarn_throttle(3, "%s - Received an empty path! Publishing empty collision points.", rospy.get_name())
-            
-            # Publish an empty PointCloud2 message with the correct header
             empty_collision_points_msg = msgify(PointCloud2, collision_points)
             empty_collision_points_msg.header = msg.header
             self.local_path_collision_pub.publish(empty_collision_points_msg)
