@@ -9,6 +9,8 @@ from lanelet2.core import BasicPoint2d
 from lanelet2.geometry import findNearest
 from lanelet2.routing import RoutingGraph, Route
 from autoware_mini.msg import Path, Waypoint
+import shapely.geometry as sg
+
 
 
 class Lanelet2GlobalPlanner:
@@ -31,7 +33,7 @@ class Lanelet2GlobalPlanner:
         rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_callback)
         rospy.Subscriber("/localization/current_pose", PoseStamped, self.current_position_callback) 
         # Publishers (add global path publisher later)
-        self.waypoints_pub = rospy.Publisher("global_path", Path, queue_size=1, latch=True)
+        self.waypoints_pub = rospy.Publisher("/planning/global_path", Path, queue_size=1, latch=True)
     
     def load_lanelet2_map(self):
         coordinate_transformer = rospy.get_param("/coordinate_transformer", "utm")
@@ -77,79 +79,115 @@ class Lanelet2GlobalPlanner:
         return waypoints
 
     def publish_waypoints(self, waypoints):
-            path = Path()        
-            path.header.frame_id = self.output_frame 
-            path.header.stamp = rospy.Time.now()
-            path.waypoints = waypoints 
+        if waypoints is None:
+            waypoints = []
+
+        path = Path()        
+        path.header.frame_id = self.output_frame 
+        path.header.stamp = rospy.Time.now()
+        path.waypoints = waypoints 
             
-            self.waypoints_pub.publish(path)
+        self.waypoints_pub.publish(path)
             
-            if not waypoints:
-                pass 
-            else:
-                rospy.loginfo("%s: Published global path with %d waypoints to /global_path.", 
-                            rospy.get_name(), len(waypoints))
+        if not waypoints:
+            rospy.loginfo("%s: Published empty global path to signal stop/clear.", rospy.get_name())
+        else:
+            rospy.loginfo("%s: Published global path with %d waypoints to /global_path.", 
+                          rospy.get_name(), len(waypoints))
+        
+            # ADD THIS LOGGING:
+        if waypoints:
+            rospy.loginfo("%s: Published global path with %d waypoints. Final waypoint at (%.2f, %.2f)", 
+                        rospy.get_name(), len(waypoints), 
+                        waypoints[-1].position.x, waypoints[-1].position.y)
+        else:
+            rospy.loginfo("%s: Published EMPTY global path", rospy.get_name())
 
 
     def goal_callback(self, msg: PoseStamped):
-        user_goal_point_2d = BasicPoint2d(msg.pose.position.x, msg.pose.position.y) 
-        self.goal_point = user_goal_point_2d 
-        
         if self.current_location is None:
-            rospy.logwarn("%s: Current location is not yet available. Cannot plan path.", rospy.get_name())
+            rospy.logwarn("%s: Ignoring goal — current location unknown.", rospy.get_name())
             return
-            
-        start_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.current_location, 1)[0][1]
-        goal_lanelet = findNearest(self.lanelet2_map.laneletLayer, user_goal_point_2d, 1)[0][1]
+
+        # Convert user click to 2D
+        user_goal_point_2d = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
+        self.goal_point = user_goal_point_2d
+
+        try:
+            start_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.current_location, 1)[0][1]
+            goal_lanelet = findNearest(self.lanelet2_map.laneletLayer, user_goal_point_2d, 1)[0][1]
+        except Exception as e:
+            rospy.logerr("%s: Failed to find nearest lanelets: %s", rospy.get_name(), e)
+            return
+
         route = self.graph.getRoute(start_lanelet, goal_lanelet, 0, True)
+        if not route:
+            rospy.logwarn("%s: No route found between start and goal.", rospy.get_name())
+            return
 
-        if route:
-            path = route.shortestPath()
-            path_no_lane_change = path.getRemainingLane(start_lanelet)
-            
-            full_waypoints = self.convert_lanelet_sequence_to_waypoints(path_no_lane_change)
-            
-            final_waypoints = []
-            
-            goal_x = user_goal_point_2d.x
-            goal_y = user_goal_point_2d.y
-            
-            delta_start_x = self.current_location.x - goal_x
-            delta_start_y = self.current_location.y - goal_y
-            total_route_distance = (delta_start_x**2 + delta_start_y**2)**0.5
+        path = route.shortestPath()
+        if path is None:
+            rospy.logwarn("%s: shortestPath() returned None.", rospy.get_name())
+            return
 
-            
-            min_dist_to_goal = float('inf')
-            
-            for wp in full_waypoints:
-                dist_x = wp.position.x - goal_x
-                dist_y = wp.position.y - goal_y
-                dist_to_goal = (dist_x**2 + dist_y**2)**0.5
-                
+        path_no_lane_change = path.getRemainingLane(start_lanelet)
+        if path_no_lane_change is None:
+            rospy.logwarn("%s: No continuous lane sequence from start.", rospy.get_name())
+            return
 
-                if dist_to_goal > min_dist_to_goal and dist_to_goal > 1.0:
-                    break
-                
-                final_waypoints.append(wp)
-                min_dist_to_goal = dist_to_goal
-                
-            if final_waypoints:
-                approach_speed = final_waypoints[-1].speed
-            else:
-                approach_speed = self.speed_limit_mps 
-                
-            final_waypoint = Waypoint()
-            final_waypoint.position.x = goal_x
-            final_waypoint.position.y = goal_y
-            final_waypoint.position.z = msg.pose.position.z if hasattr(msg.pose.position, 'z') else 0.0
-            final_waypoint.speed = 0.0 
-            
-            waypoints_to_publish = final_waypoints + [final_waypoint]
-            
-            self.publish_waypoints(waypoints_to_publish)
-        else:
-            rospy.logwarn("%s: No route found between start and goal lanelets.", rospy.get_name())
+        waypoints = self.convert_lanelet_sequence_to_waypoints(path_no_lane_change)
+        if not waypoints:
+            rospy.logwarn("%s: No waypoints generated.", rospy.get_name())
+            return
 
+        
+        # Create LineString from current waypoints
+        path_line = sg.LineString([(wp.position.x, wp.position.y) for wp in waypoints])
+        user_goal_point = sg.Point(user_goal_point_2d.x, user_goal_point_2d.y)
+        # Find closest point on path to user goal
+        closest_point_on_path = path_line.interpolate(path_line.project(user_goal_point))
+        # Find the waypoint index to truncate
+        truncate_index = len(waypoints) - 1  # Default to full path
+        
+        for i, wp in enumerate(waypoints):
+            wp_point = sg.Point(wp.position.x, wp.position.y)
+            if wp_point.distance(closest_point_on_path) < 0.1:  
+                truncate_index = i
+                break
+        
+        # If no waypoint was found, find the segment to interpolate
+        if truncate_index == len(waypoints) - 1:
+            # Find the line segment that contains the closest point
+            min_dist = float('inf')
+            for i in range(len(waypoints) - 1):
+                segment = sg.LineString([(waypoints[i].position.x, waypoints[i].position.y),
+                                    (waypoints[i+1].position.x, waypoints[i+1].position.y)])
+                dist = segment.distance(closest_point_on_path)
+                if dist < min_dist:
+                    min_dist = dist
+                    if dist < 0.1: 
+                        # Create interpolated waypoint at exact goal position
+                        goal_waypoint = Waypoint()
+                        goal_waypoint.position.x = closest_point_on_path.x
+                        goal_waypoint.position.y = closest_point_on_path.y
+                        goal_waypoint.position.z = waypoints[i].position.z  # Use z from previous point
+                        goal_waypoint.speed = waypoints[i].speed  # Use speed from previous point
+                        
+                        # Truncate path and add the goal waypoint
+                        waypoints = waypoints[:i+1] + [goal_waypoint]
+                        truncate_index = i + 1
+                        break
+        
+        # Truncate the path at the goal point
+        waypoints = waypoints[:truncate_index + 1]
+        
+        if waypoints:
+            final_wp = waypoints[-1]
+            final_wp.position.x = closest_point_on_path.x
+            final_wp.position.y = closest_point_on_path.y
+        
+        self.goal_point = BasicPoint2d(closest_point_on_path.x, closest_point_on_path.y)
+        self.publish_waypoints(waypoints)
 
     def current_position_callback(self, msg: PoseStamped):
         self.current_location = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)

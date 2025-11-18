@@ -92,7 +92,6 @@ class CollisionPointsManager:
             goal_point = shapely.Point(goal_waypoint_position.x, goal_waypoint_position.y)
             
             if local_path_buffer.intersects(goal_point):
-                
                 goal_vx, goal_vy, goal_vz = 0.0, 0.0, 0.0
                 goal_x, goal_y, goal_z = goal_point.x, goal_point.y, goal_waypoint_position.z
                 
@@ -108,8 +107,7 @@ class CollisionPointsManager:
 
         if len(collision_points) == 0:
             rospy.logdebug_throttle(3, "%s - No goal or obstacles found. Publishing empty collision points.", rospy.get_name())
-
-        
+            
         collision_points_msg = msgify(PointCloud2, collision_points)
         collision_points_msg.header = msg.header
         self.local_path_collision_pub.publish(collision_points_msg)

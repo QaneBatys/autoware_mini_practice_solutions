@@ -62,92 +62,90 @@ class SpeedPlanner:
                 current_speed = self.current_speed
 
             if current_position is None or current_speed is None:
-                rospy.logwarn_throttle(3, "%s - Current pose or speed not received! Returning.", rospy.get_name())
                 return
             
             if not local_path_msg.waypoints:
-                rospy.logwarn_throttle(3, "%s - Received an empty path! Returning.", rospy.get_name())
                 return
 
             if len(collision_points) == 0:
-                rospy.logdebug_throttle(3, "%s - No collision points found, publishing original path.", rospy.get_name())
                 self.local_path_pub.publish(local_path_msg)
-                return         
+                return
 
+            # Create local path linestring
             local_path_linestring = shapely.LineString(
                 [(wp.position.x, wp.position.y) for wp in local_path_msg.waypoints]
             )
 
+            # Calculate distances to collision points along the path
             collision_points_shapely = shapely.points(structured_to_unstructured(collision_points[['x', 'y', 'z']]))
-            collision_point_distances = np.array([local_path_linestring.project(collision_point_shapely) for collision_point_shapely in collision_points_shapely])
-            
-            projected_object_speeds = [] 
-            
+            collision_point_distances = np.array([local_path_linestring.project(cp) for cp in collision_points_shapely])
 
+            # Calculate projected velocities for each collision point
+            collision_point_velocities = []
+            
             for dist, point in zip(collision_point_distances, collision_points):
+                # Get heading at the collision point distance and its velocity
                 heading_angle = self.get_heading_at_distance(local_path_linestring, dist)
-                    
                 vx, vy = point['vx'], point['vy']
                 object_vector = Vector3(x=vx, y=vy, z=0.0)
-                    
+                # Project velocity to path heading
                 projected_speed = self.project_vector_to_heading(heading_angle, object_vector)
-                projected_object_speeds.append(projected_speed)
-                    
+                collision_point_velocities.append(projected_speed)
+                # Print actual speed vs projected speed as requested
                 actual_speed = math.sqrt(vx**2 + vy**2)
-                rospy.loginfo( "object velocity: %.10f transformed velocity: %.10f", actual_speed, projected_speed)
-                
-            projected_object_speeds = np.array(projected_object_speeds)
+                rospy.loginfo("Object velocity: %.2f m/s, projected velocity: %.2f m/s", actual_speed, projected_speed)
+            
+            collision_point_velocities = np.array(collision_point_velocities)
+
+            # Account for distance_to_car_front and distance_to_stop
             distance_to_stop_values = collision_points['distance_to_stop']
-            
-            safety_buffer = self.braking_reaction_time * np.abs(projected_object_speeds)
-            
-            target_distances = collision_point_distances - safety_buffer
-            
-            deceleration_distances = target_distances - self.distance_to_car_front - distance_to_stop_values
-            
-            target_relative_velocity_squared = np.maximum(
-                2.0 * self.default_deceleration * deceleration_distances, 
-                0.0 
-            )
-            
-            clamped_projected_speeds = np.maximum(0.0, projected_object_speeds)
-            
-            target_velocities = np.sqrt(target_relative_velocity_squared) - clamped_projected_speeds
-            
+            # Calculate effective stopping distance for each collision point and it is not negative
+            # Effective distance is basically distance from distance to allocated buffer.
+            effective_stopping_distances = collision_point_distances - self.distance_to_car_front - distance_to_stop_values
+            effective_stopping_distances = np.maximum(effective_stopping_distances, 0.0)
+            # target_distances using safety buffer and it is also non negative
+            safety_buffer = self.braking_reaction_time * np.abs(collision_point_velocities)
+            target_distances = effective_stopping_distances - safety_buffer            
+            target_distances = np.maximum(target_distances, 0.0)
+            # Calculating target velocities
+            clamped_velocities = np.maximum(collision_point_velocities, 0.0)
+            target_velocities = np.sqrt(2 * self.default_deceleration * target_distances) - clamped_velocities            
+            target_velocities = np.maximum(target_velocities, 0.0)
 
-
+            # Find the collision point that gives the lowest target velocity and its distance
             min_target_velocity = np.min(target_velocities)
+            min_velocity_idx = np.argmin(target_velocities)     
+            critical_collision_distance = collision_point_distances[min_velocity_idx]
+            critical_effective_distance = effective_stopping_distances[min_velocity_idx]
+            critical_target_distance = target_distances[min_velocity_idx]
+            critical_object_velocity = collision_point_velocities[min_velocity_idx]
+            critical_distance_to_stop = distance_to_stop_values[min_velocity_idx]
+            critical_object_category = collision_points['category'][min_velocity_idx] if 'category' in collision_points.dtype.names else 0
 
-            min_vel_idx = np.argmin(target_velocities)
+            closest_object_distance = critical_effective_distance  # Distance from car front to stopping point for critical object
+            closest_object_velocity = critical_object_velocity     # Velocity of critical collision point
+            stopping_point_distance = critical_collision_distance - critical_distance_to_stop  # Distance from base_link to obstacle before buffer
 
-            
-            critical_obstacle_distance = collision_point_distances[min_vel_idx]
-            critical_object_projected_speed = projected_object_speeds[min_vel_idx]
-            critical_distance_to_stop = distance_to_stop_values[min_vel_idx]
-            
-            required_stopping_point_distance = critical_obstacle_distance - (self.distance_to_car_front + critical_distance_to_stop)
-            
-            collision_point_category = collision_points['category'][min_vel_idx] if 'category' in collision_points.dtype.names else 0 
+            rospy.loginfo("Critical object: distance=%.2fm, velocity=%.2fm/s, target_distance=%.2fm, target_velocity=%.2fm/s", 
+                        critical_collision_distance, critical_object_velocity, critical_target_distance, min_target_velocity)
 
+            # Apply speed reduction
+            for wp in local_path_msg.waypoints:
+                wp.speed = min(min_target_velocity, wp.speed)
 
-            target_velocity = min_target_velocity
-            for i, wp in enumerate(local_path_msg.waypoints):
-                wp.speed = min(target_velocity, wp.speed) 
-            
-            
             path = Path()
             path.header = local_path_msg.header
-            path.waypoints = local_path_msg.waypoints 
-            path.closest_object_distance = critical_obstacle_distance
-            path.closest_object_velocity = critical_object_projected_speed 
+            path.waypoints = local_path_msg.waypoints
+            path.closest_object_distance = closest_object_distance
+            path.closest_object_velocity = closest_object_velocity
             path.is_blocked = True
-            path.stopping_point_distance = required_stopping_point_distance
-            path.collision_point_category = collision_point_category 
+            path.stopping_point_distance = stopping_point_distance
+            path.collision_point_category = critical_object_category
             
             self.local_path_pub.publish(path)
 
         except Exception as e:
-            rospy.logerr_throttle(10, "%s - Exception in callback: %s", rospy.get_name(), traceback.format_exc())
+            rospy.logerr_throttle(10, "%s - Exception: %s", rospy.get_name(), traceback.format_exc())
 
 
 
