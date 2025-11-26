@@ -33,7 +33,7 @@ class Lanelet2GlobalPlanner:
         rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.goal_callback)
         rospy.Subscriber("/localization/current_pose", PoseStamped, self.current_position_callback) 
         # Publishers (add global path publisher later)
-        self.waypoints_pub = rospy.Publisher("/planning/global_path", Path, queue_size=1, latch=True)
+        self.waypoints_pub = rospy.Publisher("global_path", Path, queue_size=1, latch=True)
     
     def load_lanelet2_map(self):
         coordinate_transformer = rospy.get_param("/coordinate_transformer", "utm")
@@ -90,12 +90,11 @@ class Lanelet2GlobalPlanner:
         self.waypoints_pub.publish(path)
             
         if not waypoints:
-            rospy.loginfo("%s: Published empty global path to signal stop/clear.", rospy.get_name())
+            #rospy.loginfo("%s: Published empty global path to signal stop/clear.", rospy.get_name())
         else:
             rospy.loginfo("%s: Published global path with %d waypoints to /global_path.", 
                           rospy.get_name(), len(waypoints))
         
-            # ADD THIS LOGGING:
         if waypoints:
             rospy.loginfo("%s: Published global path with %d waypoints. Final waypoint at (%.2f, %.2f)", 
                         rospy.get_name(), len(waypoints), 
@@ -201,8 +200,7 @@ class Lanelet2GlobalPlanner:
                 # Goal reached case
                 self.publish_waypoints([])
                 self.goal_point = None 
-                rospy.loginfo("%s: Goal reached (distance: %.2fm). Path has been cleared.", 
-                              rospy.get_name(), goal_distance)
+                #rospy.loginfo("%s: Goal reached (distance: %.2fm). Path has been cleared.", rospy.get_name(), goal_distance)
 
     def run(self):
         rospy.spin()

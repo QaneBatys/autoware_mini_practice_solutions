@@ -86,14 +86,14 @@ class SpeedPlanner:
             for dist, point in zip(collision_point_distances, collision_points):
                 # Get heading at the collision point distance and its velocity
                 heading_angle = self.get_heading_at_distance(local_path_linestring, dist)
-                vx, vy = point['vx'], point['vy']
-                object_vector = Vector3(x=vx, y=vy, z=0.0)
+                vx, vy, vz = point['vx'], point['vy'], point['vz']
+                object_vector = Vector3(x=vx, y=vy, z=vz)
                 # Project velocity to path heading
                 projected_speed = self.project_vector_to_heading(heading_angle, object_vector)
                 collision_point_velocities.append(projected_speed)
                 # Print actual speed vs projected speed as requested
                 actual_speed = math.sqrt(vx**2 + vy**2)
-                rospy.loginfo("Object velocity: %.2f m/s, projected velocity: %.2f m/s", actual_speed, projected_speed)
+                #rospy.loginfo("Object velocity: %.2f m/s, projected velocity: %.2f m/s", actual_speed, projected_speed)
             
             collision_point_velocities = np.array(collision_point_velocities)
 
@@ -126,8 +126,7 @@ class SpeedPlanner:
             closest_object_velocity = critical_object_velocity     # Velocity of critical collision point
             stopping_point_distance = critical_collision_distance - critical_distance_to_stop  # Distance from base_link to obstacle before buffer
 
-            rospy.loginfo("Critical object: distance=%.2fm, velocity=%.2fm/s, target_distance=%.2fm, target_velocity=%.2fm/s", 
-                        critical_collision_distance, critical_object_velocity, critical_target_distance, min_target_velocity)
+            #rospy.loginfo("Critical object: distance=%.2fm, velocity=%.2fm/s, target_distance=%.2fm, target_velocity=%.2fm/s", critical_collision_distance, critical_object_velocity, critical_target_distance, min_target_velocity)
 
             # Apply speed reduction
             for wp in local_path_msg.waypoints:
