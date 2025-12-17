@@ -120,8 +120,6 @@ class CameraTrafficLightDetector:
                 stoplines_on_path.append(stopline_id)
                 #rospy.loginfo("Stop line %d intersects with local path!", stopline_id)
                 #rospy.loginfo("Stop line geometry: %s", stopline_geometry)
-            else:
-                rospy.logdebug("Stop line %d does NOT intersect with local path", stopline_id)
         
         
         with self.lock:
@@ -143,7 +141,6 @@ class CameraTrafficLightDetector:
 
         # Check if we have stop lines on our local path
         if not stoplines_on_path:
-            rospy.logdebug("No stop lines on path, skipping traffic light detection")
             # Publish empty results if that case
             tfl_result_array = TrafficLightResultArray()
             tfl_result_array.header.stamp = camera_image_msg.header.stamp
@@ -206,8 +203,6 @@ class CameraTrafficLightDetector:
         tfl_result_array = TrafficLightResultArray()
         tfl_result_array.header.stamp = camera_image_msg.header.stamp  # Using image timestamp
         
-        self.tfl_status_pub.publish(tfl_result_array)
-
         # Empty variables needed for publish_roi_images
         classes = []  # Empty list of classes
         scores = []  # Empty list of scores
